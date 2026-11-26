@@ -3,7 +3,9 @@
  *
  * 使用内置 $http 发起单次对话请求，需开启键盘「完全访问」权限。
  *
- * 输入来源（按优先级）：脚本输入框 $searchText → 键盘选中文本 $selectedText → 剪贴板 $pasteboardContent
+ * 触发规则（不自动提交）：
+ * - 仅在脚本输入框 $searchText 非空时发起请求；打开脚本时即使存在选中文本或剪贴板内容也不会自动发送。
+ * - 当宿主应用存在选中文本 $selectedText 时，自动附加在 $searchText 末尾一起发送。
  *
  * 元书「脚本 → ... → 变量」配置：
  * - deepseek_api_key（必填）：API Key
@@ -21,18 +23,13 @@ async function output() {
     return fallback;
   }
 
-  function pickInput() {
-    var sources = [
-      typeof $searchText === "string" ? $searchText : "",
-      typeof $selectedText === "string" ? $selectedText : "",
-      typeof $pasteboardContent === "string" ? $pasteboardContent : "",
-    ];
-    for (var i = 0; i < sources.length; i++) {
-      if (sources[i] && sources[i].trim().length > 0) {
-        return sources[i].trim();
-      }
+  function previewText(text, maxLen) {
+    var singleLine = text.replace(/\s+/g, " ").trim();
+    var chars = Array.from(singleLine);
+    if (chars.length <= maxLen) {
+      return singleLine;
     }
-    return "";
+    return chars.slice(0, maxLen).join("") + "…";
   }
 
   function resolveEndpoint(rawUrl) {
@@ -102,6 +99,23 @@ async function output() {
     return "";
   }
 
+  var prompt =
+    typeof $searchText === "string" ? $searchText.trim() : "";
+  var selected =
+    typeof $selectedText === "string" ? $selectedText.trim() : "";
+
+  // 不自动提交：未在脚本输入框输入提示词时不发起任何网络请求
+  if (!prompt) {
+    if (selected) {
+      return [
+        "请输入提示词后发送（已附带选中文本：" +
+          previewText(selected, 24) +
+          "）",
+      ];
+    }
+    return ["请输入提示词后再运行 DeepSeek"];
+  }
+
   var apiKey = readVar(
     typeof $deepseek_api_key !== "undefined" ? $deepseek_api_key : "",
     ""
@@ -110,10 +124,7 @@ async function output() {
     return ["未配置变量 deepseek_api_key（请在元书「脚本 → ... → 变量」中添加）"];
   }
 
-  var input = pickInput();
-  if (!input) {
-    return ["请输入问题或选中文本后再运行 DeepSeek"];
-  }
+  var userMessage = selected ? prompt + "\n\n" + selected : prompt;
 
   var endpoint = resolveEndpoint(
     readVar(
@@ -140,7 +151,7 @@ async function output() {
     model: model,
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: input },
+      { role: "user", content: userMessage },
     ],
     stream: false,
   };
@@ -149,7 +160,11 @@ async function output() {
   }
 
   try {
-    $log("DeepSeek 请求模型: " + model);
+    $log(
+      "DeepSeek 请求模型: " +
+        model +
+        (selected ? "（附带选中文本）" : "")
+    );
     var res = null;
     var status = 0;
     for (var attempt = 0; attempt < 2; attempt++) {

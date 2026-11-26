@@ -238,8 +238,33 @@ async function main() {
     });
   }
 
-  // 6. DeepSeek（$http + 变量 + /v1 规范化 + thinking + 429 重试）
+  // 6. DeepSeek（不自动提交 + 末尾附带选中文本 + /v1 规范化 + thinking + 429 重试）
   {
+    // 仅有选中文本或剪贴板、无 $searchText 时绝不发起网络请求
+    let autoCalled = false;
+    const noAutoSelected = await runScript("scripts/deepseek.js", {
+      $selectedText: "这是一段被选中的正文内容",
+      $deepseek_api_key: "sk-test-123",
+      $http: async () => {
+        autoCalled = true;
+        return { data: "{}", response: { statusCode: 200 } };
+      },
+    });
+    assert.equal(autoCalled, false);
+    assert.match(noAutoSelected.result[0], /请输入提示词后发送/);
+    assert.match(noAutoSelected.result[0], /这是一段被选中的正文内容/);
+
+    const noAutoPasteboard = await runScript("scripts/deepseek.js", {
+      $pasteboardContent: "剪贴板里的敏感内容",
+      $deepseek_api_key: "sk-test-123",
+      $http: async () => {
+        autoCalled = true;
+        return { data: "{}", response: { statusCode: 200 } };
+      },
+    });
+    assert.equal(autoCalled, false);
+    assert.match(noAutoPasteboard.result[0], /请输入提示词后再运行/);
+
     const missing = await runScript("scripts/deepseek.js", {
       $searchText: "hi",
     });
@@ -248,7 +273,8 @@ async function main() {
     let attempts = 0;
     let captured = null;
     const ok = await runScript("scripts/deepseek.js", {
-      $searchText: "总结一句话",
+      $searchText: "润色得更正式",
+      $selectedText: "明天不行，改天吧",
       $deepseek_api_key: "sk-test-123",
       $deepseek_base_url: "https://api.deepseek.com/v1",
       $deepseek_model: "deepseek-v4-flash",
@@ -274,10 +300,31 @@ async function main() {
     assert.deepEqual(JSON.parse(JSON.stringify(captured.body.thinking)), {
       type: "disabled",
     });
+    assert.equal(
+      captured.body.messages[1].content,
+      "润色得更正式\n\n明天不行，改天吧"
+    );
     assert.equal(captured.header.Authorization, "Bearer sk-test-123");
     assert.equal(captured.body.model, "deepseek-v4-flash");
     // 确认日志中未打印 API Key
     assert.ok(ok.logs.every((l) => !l.includes("sk-test-123")));
+
+    // 仅输入 $searchText、无选中文本时只发送提示词本身
+    let onlyPromptCaptured = null;
+    await runScript("scripts/deepseek.js", {
+      $searchText: "写一句晚安",
+      $deepseek_api_key: "sk-test-123",
+      $http: async (req) => {
+        onlyPromptCaptured = req;
+        return {
+          data: JSON.stringify({
+            choices: [{ message: { content: "晚安。" } }],
+          }),
+          response: { statusCode: 200 },
+        };
+      },
+    });
+    assert.equal(onlyPromptCaptured.body.messages[1].content, "写一句晚安");
   }
 
   // 7. Webhook 发送（单次手动外发）

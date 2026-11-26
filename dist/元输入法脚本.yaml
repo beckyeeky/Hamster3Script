@@ -288,25 +288,24 @@ scripts:
   iconType: system
   name: DeepSeek
   content: "/**\n * 元书输入法 · DeepSeek（支持任意 OpenAI Chat Completions 兼容接口）\n *\n * 使用内置\
-    \ $http 发起单次对话请求，需开启键盘「完全访问」权限。\n *\n * 输入来源（按优先级）：脚本输入框 $searchText → 键盘选中文本\
-    \ $selectedText → 剪贴板 $pasteboardContent\n *\n * 元书「脚本 → ... → 变量」配置：\n * - deepseek_api_key（必填）：API\
+    \ $http 发起单次对话请求，需开启键盘「完全访问」权限。\n *\n * 触发规则（不自动提交）：\n * - 仅在脚本输入框 $searchText\
+    \ 非空时发起请求；打开脚本时即使存在选中文本或剪贴板内容也不会自动发送。\n * - 当宿主应用存在选中文本 $selectedText 时，自动附加在\
+    \ $searchText 末尾一起发送。\n *\n * 元书「脚本 → ... → 变量」配置：\n * - deepseek_api_key（必填）：API\
     \ Key\n * - deepseek_base_url（可选）：接口地址，默认 https://api.deepseek.com/chat/completions\n\
     \ * - deepseek_model（可选）：模型名称，默认 deepseek-chat\n * - deepseek_system_prompt（可选）：系统提示词，默认直接返回适合上屏的精简文本\n\
     \ * - deepseek_thinking（可选）：仅对 api.deepseek.com 生效，默认 disabled；填 enabled 可启用思考模式\n\
     \ */\n\nasync function output() {\n  function readVar(value, fallback) {\n   \
     \ if (typeof value === \"string\" && value.trim().length > 0) {\n      return\
-    \ value.trim();\n    }\n    return fallback;\n  }\n\n  function pickInput() {\n\
-    \    var sources = [\n      typeof $searchText === \"string\" ? $searchText :\
-    \ \"\",\n      typeof $selectedText === \"string\" ? $selectedText : \"\",\n \
-    \     typeof $pasteboardContent === \"string\" ? $pasteboardContent : \"\",\n\
-    \    ];\n    for (var i = 0; i < sources.length; i++) {\n      if (sources[i]\
-    \ && sources[i].trim().length > 0) {\n        return sources[i].trim();\n    \
-    \  }\n    }\n    return \"\";\n  }\n\n  function resolveEndpoint(rawUrl) {\n \
-    \   var cleaned = rawUrl.replace(/\\/+$/, \"\");\n    if (/\\/chat\\/completions$/i.test(cleaned))\
-    \ {\n      return cleaned;\n    }\n    // DeepSeek 端点去除冗余的 /v1\n    if (/^https?:\\\
-    /\\/api\\.deepseek\\.com\\/v1$/i.test(cleaned)) {\n      return cleaned.replace(/\\\
-    /v1$/i, \"\") + \"/chat/completions\";\n    }\n    return cleaned + \"/chat/completions\"\
-    ;\n  }\n\n  function isDeepSeekHost(url) {\n    return /^https?:\\/\\/api\\.deepseek\\\
+    \ value.trim();\n    }\n    return fallback;\n  }\n\n  function previewText(text,\
+    \ maxLen) {\n    var singleLine = text.replace(/\\s+/g, \" \").trim();\n    var\
+    \ chars = Array.from(singleLine);\n    if (chars.length <= maxLen) {\n      return\
+    \ singleLine;\n    }\n    return chars.slice(0, maxLen).join(\"\") + \"…\";\n\
+    \  }\n\n  function resolveEndpoint(rawUrl) {\n    var cleaned = rawUrl.replace(/\\\
+    /+$/, \"\");\n    if (/\\/chat\\/completions$/i.test(cleaned)) {\n      return\
+    \ cleaned;\n    }\n    // DeepSeek 端点去除冗余的 /v1\n    if (/^https?:\\/\\/api\\.deepseek\\\
+    .com\\/v1$/i.test(cleaned)) {\n      return cleaned.replace(/\\/v1$/i, \"\") +\
+    \ \"/chat/completions\";\n    }\n    return cleaned + \"/chat/completions\";\n\
+    \  }\n\n  function isDeepSeekHost(url) {\n    return /^https?:\\/\\/api\\.deepseek\\\
     .com(\\/|$)/i.test(url);\n  }\n\n  function normalizeContent(content) {\n    if\
     \ (typeof content === \"string\") {\n      return content.trim();\n    }\n   \
     \ if (Array.isArray(content)) {\n      var parts = [];\n      for (var i = 0;\
@@ -326,11 +325,16 @@ scripts:
     \   return deltaText;\n        }\n      }\n    }\n    if (parsed.output_text !==\
     \ undefined) {\n      return normalizeContent(parsed.output_text);\n    }\n  \
     \  if (parsed.content !== undefined) {\n      return normalizeContent(parsed.content);\n\
-    \    }\n    return \"\";\n  }\n\n  var apiKey = readVar(\n    typeof $deepseek_api_key\
-    \ !== \"undefined\" ? $deepseek_api_key : \"\",\n    \"\"\n  );\n  if (!apiKey)\
-    \ {\n    return [\"未配置变量 deepseek_api_key（请在元书「脚本 → ... → 变量」中添加）\"];\n  }\n\n\
-    \  var input = pickInput();\n  if (!input) {\n    return [\"请输入问题或选中文本后再运行 DeepSeek\"\
-    ];\n  }\n\n  var endpoint = resolveEndpoint(\n    readVar(\n      typeof $deepseek_base_url\
+    \    }\n    return \"\";\n  }\n\n  var prompt =\n    typeof $searchText === \"\
+    string\" ? $searchText.trim() : \"\";\n  var selected =\n    typeof $selectedText\
+    \ === \"string\" ? $selectedText.trim() : \"\";\n\n  // 不自动提交：未在脚本输入框输入提示词时不发起任何网络请求\n\
+    \  if (!prompt) {\n    if (selected) {\n      return [\n        \"请输入提示词后发送（已附带选中文本：\"\
+    \ +\n          previewText(selected, 24) +\n          \"）\",\n      ];\n    }\n\
+    \    return [\"请输入提示词后再运行 DeepSeek\"];\n  }\n\n  var apiKey = readVar(\n    typeof\
+    \ $deepseek_api_key !== \"undefined\" ? $deepseek_api_key : \"\",\n    \"\"\n\
+    \  );\n  if (!apiKey) {\n    return [\"未配置变量 deepseek_api_key（请在元书「脚本 → ... →\
+    \ 变量」中添加）\"];\n  }\n\n  var userMessage = selected ? prompt + \"\\n\\n\" + selected\
+    \ : prompt;\n\n  var endpoint = resolveEndpoint(\n    readVar(\n      typeof $deepseek_base_url\
     \ !== \"undefined\" ? $deepseek_base_url : \"\",\n      \"https://api.deepseek.com/chat/completions\"\
     \n    )\n  );\n  var model = readVar(\n    typeof $deepseek_model !== \"undefined\"\
     \ ? $deepseek_model : \"\",\n    \"deepseek-chat\"\n  );\n  var systemPrompt =\
@@ -339,11 +343,12 @@ scripts:
     \n  );\n  var thinkingMode = readVar(\n    typeof $deepseek_thinking !== \"undefined\"\
     \ ? $deepseek_thinking : \"\",\n    \"disabled\"\n  );\n\n  var body = {\n   \
     \ model: model,\n    messages: [\n      { role: \"system\", content: systemPrompt\
-    \ },\n      { role: \"user\", content: input },\n    ],\n    stream: false,\n\
+    \ },\n      { role: \"user\", content: userMessage },\n    ],\n    stream: false,\n\
     \  };\n  if (isDeepSeekHost(endpoint) && thinkingMode !== \"enabled\") {\n   \
-    \ body.thinking = { type: \"disabled\" };\n  }\n\n  try {\n    $log(\"DeepSeek\
-    \ 请求模型: \" + model);\n    var res = null;\n    var status = 0;\n    for (var attempt\
-    \ = 0; attempt < 2; attempt++) {\n      res = await $http({\n        url: endpoint,\n\
+    \ body.thinking = { type: \"disabled\" };\n  }\n\n  try {\n    $log(\n      \"\
+    DeepSeek 请求模型: \" +\n        model +\n        (selected ? \"（附带选中文本）\" : \"\"\
+    )\n    );\n    var res = null;\n    var status = 0;\n    for (var attempt = 0;\
+    \ attempt < 2; attempt++) {\n      res = await $http({\n        url: endpoint,\n\
     \        method: \"POST\",\n        header: {\n          \"Content-Type\": \"\
     application/json\",\n          Authorization: \"Bearer \" + apiKey,\n        },\n\
     \        body: body,\n        timeout: 30,\n      });\n      status = res && res.response\

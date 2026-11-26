@@ -4,7 +4,7 @@
 
 ## 脚本列表
 
-所有脚本均为**单次手动触发**动作，按优先级 `$searchText` → `$selectedText` → `$pasteboardContent` 读取输入，并将结果返回到候选栏。
+所有脚本均为**单次手动触发**动作，并将结果返回到候选栏。除 `DeepSeek`（不自动提交，仅在输入 `$searchText` 后发送并自动在末尾附带 `$selectedText`）外，其余需输入脚本按 `$searchText` → `$selectedText` → `$pasteboardContent` 优先级读取文本。
 
 | 脚本名称 | 源码文件 | 联网 | 剪贴板默认 | 说明 |
 |---|---|---|---|---|
@@ -14,7 +14,7 @@
 | `Unicode 查询` | `scripts/unicode.js` | 否 | 关闭 | 正向输出 `U+XXXX` 码位；输入全为 `U+XXXX` 序列时自动反查还原字符 |
 | `快捷翻译` | `scripts/quick-translate.js` | 否 | 关闭 | 调用 iOS 26+ 系统离线 `$translater`，自动中英/日汉/韩汉互译，支持 `ja:` 等前缀指定目标语 |
 | `谷歌中英互译` | `scripts/google-translate.js` | 是 | 关闭 | 免费在线翻译：支持直连 Google（`client=gtx` 失败自动回退 `batchexecute`）或走自建代理（兼容 `POST /api/translate`） |
-| `DeepSeek` | `scripts/deepseek.js` | 是 | 关闭 | 调用 DeepSeek 或任意 OpenAI Chat Completions 兼容接口，支持自动重试与关闭思考模式 |
+| `DeepSeek` | `scripts/deepseek.js` | 是 | 关闭 | 调用 DeepSeek 或 OpenAI 兼容接口；不自动提交，输入提示词后自动在末尾附带 `$selectedText` 一并发送，支持关闭思考模式与自动重试 |
 | `Webhook 发送` | `scripts/webhook-send.js` | 是 | 关闭 | 手动触发将当前文本以 JSON POST 到自定义 Webhook，并在候选栏返回状态码 |
 
 ## 快速使用
