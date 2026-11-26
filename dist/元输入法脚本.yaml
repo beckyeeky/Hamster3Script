@@ -1,0 +1,409 @@
+scripts:
+- iconName: die.face.5
+  iconType: system
+  name: Roll
+  content: "/**\n * 元书输入法 · Roll\n *\n * 无需输入，每次运行返回一个 1 - 100 的随机整数。\n * 也可在脚本输入框输入上限（如\
+    \ 20）或骰子表达式（如 2d6）。\n *\n * 输出示例：42\n */\n\nasync function output() {\n  function\
+    \ pickInput() {\n    var sources = [\n      typeof $searchText === \"string\"\
+    \ ? $searchText : \"\",\n      typeof $selectedText === \"string\" ? $selectedText\
+    \ : \"\",\n    ];\n    for (var i = 0; i < sources.length; i++) {\n      if (sources[i]\
+    \ && sources[i].trim().length > 0) {\n        return sources[i].trim();\n    \
+    \  }\n    }\n    return \"\";\n  }\n\n  var raw = pickInput();\n\n  // 支持 NdM\
+    \ 表达式，如 2d6（最多 20 颗、最大 10000 面）\n  var diceMatch = raw.match(/^(\\d{1,2})[dD](\\\
+    d{1,5})$/);\n  if (diceMatch) {\n    var count = parseInt(diceMatch[1], 10);\n\
+    \    var sides = parseInt(diceMatch[2], 10);\n    if (count >= 1 && count <= 20\
+    \ && sides >= 2 && sides <= 10000) {\n      var rolls = [];\n      var sum = 0;\n\
+    \      for (var i = 0; i < count; i++) {\n        var n = Math.floor(Math.random()\
+    \ * sides) + 1;\n        rolls.push(n);\n        sum += n;\n      }\n      var\
+    \ detail = count > 1 ? sum + \" (\" + rolls.join(\"+\") + \")\" : String(sum);\n\
+    \      $log(\"roll \" + raw + \": \" + detail);\n      return count > 1 ? [String(sum),\
+    \ detail] : [String(sum)];\n    }\n  }\n\n  // 支持纯正整数上限，默认 100\n  var max = 100;\n\
+    \  if (/^\\d{1,6}$/.test(raw)) {\n    var parsed = parseInt(raw, 10);\n    if\
+    \ (parsed >= 2 && parsed <= 1000000) {\n      max = parsed;\n    }\n  }\n\n  var\
+    \ value = Math.floor(Math.random() * max) + 1;\n  $log(\"roll(1-\" + max + \"\
+    ): \" + value);\n  return [String(value)];\n}"
+  isFavorite: false
+  allowPasteboard: false
+  tags: []
+- iconName: curlybraces
+  iconType: system
+  name: Base64 解码
+  content: "/**\n * 元书输入法 · Base64 解码\n *\n * 输入来源（按优先级）：脚本输入框 $searchText → 键盘选中文本\
+    \ $selectedText → 剪贴板 $pasteboardContent\n *\n * 输入：5Lit5paHIGFiYw==\n * 输出：中文\
+    \ abc\n */\n\nasync function output() {\n  var BASE64_CHARS =\n    \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\"\
+    ;\n\n  // JavaScriptCore 没有 atob / TextDecoder，按字符查表手写解码\n  function base64Bytes(text)\
+    \ {\n    // 兼容 URL Safe 变体，忽略换行、空格与结尾填充\n    var normalized = text\n      .replace(/-/g,\
+    \ \"+\")\n      .replace(/_/g, \"/\")\n      .replace(/[\\s=]/g, \"\");\n    if\
+    \ (!normalized.length || normalized.length % 4 === 1) {\n      return null;\n\
+    \    }\n\n    var bytes = [];\n    var buffer = 0;\n    var bits = 0;\n    for\
+    \ (var i = 0; i < normalized.length; i++) {\n      var value = BASE64_CHARS.indexOf(normalized[i]);\n\
+    \      if (value < 0) {\n        return null;\n      }\n      buffer = (buffer\
+    \ << 6) | value;\n      bits += 6;\n      if (bits >= 8) {\n        bits -= 8;\n\
+    \        bytes.push((buffer >> bits) & 0xff);\n      }\n    }\n    return bytes;\n\
+    \  }\n\n  // 按 UTF-8 规则还原码位，String.fromCodePoint 负责补回代理对\n  function utf8Text(bytes)\
+    \ {\n    var out = \"\";\n    var i = 0;\n    while (i < bytes.length) {\n   \
+    \   var b0 = bytes[i++];\n      var cp;\n      var extra;\n      var minCp;\n\n\
+    \      if (b0 < 0x80) {\n        cp = b0;\n        extra = 0;\n        minCp =\
+    \ 0;\n      } else if ((b0 & 0xe0) === 0xc0) {\n        cp = b0 & 0x1f;\n    \
+    \    extra = 1;\n        minCp = 0x80;\n      } else if ((b0 & 0xf0) === 0xe0)\
+    \ {\n        cp = b0 & 0x0f;\n        extra = 2;\n        minCp = 0x800;\n   \
+    \   } else if ((b0 & 0xf8) === 0xf0) {\n        cp = b0 & 0x07;\n        extra\
+    \ = 3;\n        minCp = 0x10000;\n      } else {\n        return null;\n     \
+    \ }\n\n      if (i + extra > bytes.length) {\n        return null;\n      }\n\
+    \      for (var j = 0; j < extra; j++) {\n        var bx = bytes[i++];\n     \
+    \   if ((bx & 0xc0) !== 0x80) {\n          return null;\n        }\n        cp\
+    \ = (cp << 6) | (bx & 0x3f);\n      }\n\n      if (cp < minCp || cp > 0x10ffff\
+    \ || (cp >= 0xd800 && cp <= 0xdfff)) {\n        return null;\n      }\n      out\
+    \ += String.fromCodePoint(cp);\n    }\n    return out;\n  }\n\n  function pickInput()\
+    \ {\n    var sources = [\n      typeof $searchText === \"string\" ? $searchText\
+    \ : \"\",\n      typeof $selectedText === \"string\" ? $selectedText : \"\",\n\
+    \      typeof $pasteboardContent === \"string\" ? $pasteboardContent : \"\",\n\
+    \    ];\n    for (var i = 0; i < sources.length; i++) {\n      if (sources[i]\
+    \ && sources[i].trim().length > 0) {\n        return sources[i].trim();\n    \
+    \  }\n    }\n    return \"\";\n  }\n\n  var input = pickInput();\n  if (!input)\
+    \ {\n    return [\"请输入要解码的 Base64 文本，或选中文本后再运行\"];\n  }\n\n  var bytes = base64Bytes(input);\n\
+    \  if (bytes === null) {\n    return [\"输入不是有效的 Base64 编码\"];\n  }\n\n  var decoded\
+    \ = utf8Text(bytes);\n  if (decoded === null) {\n    return [\"解码结果不是有效的 UTF-8\
+    \ 文本\"];\n  }\n\n  $log(\"解码 \" + bytes.length + \" 字节\");\n  return [decoded];\n\
+    }"
+  isFavorite: false
+  allowPasteboard: false
+  tags: []
+- iconName: chevron.left.forwardslash.chevron.right
+  iconType: system
+  name: Base64 编码
+  content: "/**\n * 元书输入法 · Base64 编码\n *\n * 输入来源（按优先级）：脚本输入框 $searchText → 键盘选中文本\
+    \ $selectedText → 剪贴板 $pasteboardContent\n *\n * 输入：中文 abc\n * 输出：5Lit5paHIGFiYw==\n\
+    \ */\n\nasync function output() {\n  var BASE64_CHARS =\n    \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\"\
+    ;\n\n  // JavaScriptCore 没有 btoa / TextEncoder，按码位手写 UTF-8 编码\n  function utf8Bytes(text)\
+    \ {\n    var bytes = [];\n    // Array.from 按码位切分，emoji 等补充平面字符的代理对不会被拆散\n   \
+    \ var points = Array.from(text);\n    for (var i = 0; i < points.length; i++)\
+    \ {\n      var cp = points[i].codePointAt(0);\n      if (cp < 0x80) {\n      \
+    \  bytes.push(cp);\n      } else if (cp < 0x800) {\n        bytes.push(0xc0 |\
+    \ (cp >> 6), 0x80 | (cp & 0x3f));\n      } else if (cp < 0x10000) {\n        bytes.push(\n\
+    \          0xe0 | (cp >> 12),\n          0x80 | ((cp >> 6) & 0x3f),\n        \
+    \  0x80 | (cp & 0x3f)\n        );\n      } else {\n        bytes.push(\n     \
+    \     0xf0 | (cp >> 18),\n          0x80 | ((cp >> 12) & 0x3f),\n          0x80\
+    \ | ((cp >> 6) & 0x3f),\n          0x80 | (cp & 0x3f)\n        );\n      }\n \
+    \   }\n    return bytes;\n  }\n\n  function base64(bytes) {\n    var out = \"\"\
+    ;\n    for (var i = 0; i < bytes.length; i += 3) {\n      var b0 = bytes[i];\n\
+    \      var b1 = bytes[i + 1];\n      var b2 = bytes[i + 2];\n      var hasB1 =\
+    \ b1 !== undefined;\n      var hasB2 = b2 !== undefined;\n\n      out += BASE64_CHARS[b0\
+    \ >> 2];\n      out += BASE64_CHARS[((b0 & 0x03) << 4) | (hasB1 ? b1 >> 4 : 0)];\n\
+    \      out += hasB1\n        ? BASE64_CHARS[((b1 & 0x0f) << 2) | (hasB2 ? b2 >>\
+    \ 6 : 0)]\n        : \"=\";\n      out += hasB2 ? BASE64_CHARS[b2 & 0x3f] : \"\
+    =\";\n    }\n    return out;\n  }\n\n  function pickInput() {\n    var sources\
+    \ = [\n      typeof $searchText === \"string\" ? $searchText : \"\",\n      typeof\
+    \ $selectedText === \"string\" ? $selectedText : \"\",\n      typeof $pasteboardContent\
+    \ === \"string\" ? $pasteboardContent : \"\",\n    ];\n    for (var i = 0; i <\
+    \ sources.length; i++) {\n      // 只用 trim 判断是否为空，编码时保留原文首尾空白\n      if (sources[i]\
+    \ && sources[i].trim().length > 0) {\n        return sources[i];\n      }\n  \
+    \  }\n    return \"\";\n  }\n\n  var input = pickInput();\n  if (!input) {\n \
+    \   return [\"请输入要编码的文字，或选中文本后再运行\"];\n  }\n\n  var bytes = utf8Bytes(input);\n\
+    \  $log(\"编码 \" + bytes.length + \" 字节：\" + input);\n\n  return [base64(bytes)];\n\
+    }"
+  isFavorite: false
+  allowPasteboard: false
+  tags: []
+- iconName: text.magnifyingglass
+  iconType: system
+  name: Unicode 查询
+  content: "/**\n * 元书输入法 · Unicode 查询\n *\n * 输入来源（按优先级）：脚本输入框 $searchText → 键盘选中文本\
+    \ $selectedText → 剪贴板 $pasteboardContent\n *\n * 正向输入：中文\n * 输出：U+4E2D U+6587\n\
+    \ *\n * 反向输入：U+4E2D U+6587\n * 输出：中文\n */\n\nasync function output() {\n  function\
+    \ hex(cp) {\n    var text = cp.toString(16).toUpperCase();\n    var width = cp\
+    \ > 0xffff ? 5 : 4;\n    while (text.length < width) {\n      text = \"0\" + text;\n\
+    \    }\n    return text;\n  }\n\n  function decodeCodePoints(text) {\n    var\
+    \ tokens = text.split(/[\\s,]+/);\n    if (!tokens.length) {\n      return null;\n\
+    \    }\n    var out = \"\";\n    for (var i = 0; i < tokens.length; i++) {\n \
+    \     var m = tokens[i].match(/^[uU]\\+([0-9a-fA-F]{4,6})$/);\n      if (!m) {\n\
+    \        return null;\n      }\n      var cp = parseInt(m[1], 16);\n      if (cp\
+    \ > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {\n        return null;\n    \
+    \  }\n      out += String.fromCodePoint(cp);\n    }\n    return out;\n  }\n\n\
+    \  function pickInput() {\n    var sources = [\n      typeof $searchText === \"\
+    string\" ? $searchText : \"\",\n      typeof $selectedText === \"string\" ? $selectedText\
+    \ : \"\",\n      typeof $pasteboardContent === \"string\" ? $pasteboardContent\
+    \ : \"\",\n    ];\n    for (var i = 0; i < sources.length; i++) {\n      if (sources[i]\
+    \ && sources[i].trim().length > 0) {\n        return sources[i].trim();\n    \
+    \  }\n    }\n    return \"\";\n  }\n\n  var input = pickInput();\n  if (!input)\
+    \ {\n    return [\"请输入要查询的文字或 U+XXXX 码位，或选中文本后再运行\"];\n  }\n\n  var reversed =\
+    \ decodeCodePoints(input);\n  if (reversed !== null) {\n    $log(\"反查码位：\" + input\
+    \ + \" -> \" + reversed);\n    return [reversed];\n  }\n\n  // Array.from 按码位切分，补充平面字符的代理对不会被拆散\n\
+    \  var codePoints = Array.from(input).map(function (ch) {\n    return \"U+\" +\
+    \ hex(ch.codePointAt(0));\n  });\n\n  $log(\"查询 \" + codePoints.length + \" 个码位：\"\
+    \ + input);\n\n  return [codePoints.join(\" \")];\n}"
+  isFavorite: false
+  allowPasteboard: false
+  tags: []
+- iconName: translate
+  iconType: system
+  name: 快捷翻译
+  content: "/**\n * 元书输入法 · 快捷翻译（系统离线翻译）\n *\n * 使用 iOS 26+ 内置 $translater，在设备本地完成翻译，无需网络。\n\
+    \ * 使用前需在 iPhone「设置 → Apps → 翻译 → 语言」下载对应语言包。\n *\n * 输入来源（按优先级）：脚本输入框 $searchText\
+    \ → 键盘选中文本 $selectedText → 剪贴板 $pasteboardContent\n *\n * 默认规则：\n * - 中文 → 英文（zh-Hans\
+    \ → en）\n * - 日文 / 韩文 / 英文及其他拉丁文本 → 简体中文（→ zh-Hans）\n *\n * 指定目标语言（可选前缀）：\n *\
+    \ - 输入 `ja:你好` → 翻译为日语\n * - 输入 `en:こんにちは` → 翻译为英语\n * - 支持前缀：zh / zh-Hans / zh-Hant\
+    \ / en / ja / ko / fr / de / es\n */\n\nasync function output() {\n  function\
+    \ pickInput() {\n    var sources = [\n      typeof $searchText === \"string\"\
+    \ ? $searchText : \"\",\n      typeof $selectedText === \"string\" ? $selectedText\
+    \ : \"\",\n      typeof $pasteboardContent === \"string\" ? $pasteboardContent\
+    \ : \"\",\n    ];\n    for (var i = 0; i < sources.length; i++) {\n      if (sources[i]\
+    \ && sources[i].trim().length > 0) {\n        return sources[i].trim();\n    \
+    \  }\n    }\n    return \"\";\n  }\n\n  function detectSourceLang(text) {\n  \
+    \  if (/[\\u3040-\\u30ff]/.test(text)) {\n      return \"ja\";\n    }\n    if\
+    \ (/[\\uac00-\\ud7af]/.test(text)) {\n      return \"ko\";\n    }\n    if (/[\\\
+    u4e00-\\u9fff]/.test(text)) {\n      return \"zh-Hans\";\n    }\n    return \"\
+    en\";\n  }\n\n  function normalizeTargetLang(code) {\n    var map = {\n      zh:\
+    \ \"zh-Hans\",\n      \"zh-cn\": \"zh-Hans\",\n      \"zh-hans\": \"zh-Hans\"\
+    ,\n      \"zh-tw\": \"zh-Hant\",\n      \"zh-hant\": \"zh-Hant\",\n      en: \"\
+    en\",\n      ja: \"ja\",\n      jp: \"ja\",\n      ko: \"ko\",\n      kr: \"ko\"\
+    ,\n      fr: \"fr\",\n      de: \"de\",\n      es: \"es\",\n    };\n    return\
+    \ map[code.toLowerCase()] || null;\n  }\n\n  function parseInput(raw) {\n    var\
+    \ m = raw.match(/^([a-zA-Z]{2}(?:-[a-zA-Z]{2,4})?)\\s*[:：]\\s*([\\s\\S]+)$/);\n\
+    \    if (m) {\n      var explicitTarget = normalizeTargetLang(m[1]);\n      if\
+    \ (explicitTarget) {\n        var content = m[2].trim();\n        var src = detectSourceLang(content);\n\
+    \        if (src === explicitTarget) {\n          src = explicitTarget === \"\
+    en\" ? \"zh-Hans\" : \"en\";\n        }\n        return { text: content, source:\
+    \ src, target: explicitTarget };\n      }\n    }\n    var autoSrc = detectSourceLang(raw);\n\
+    \    var autoTarget = autoSrc === \"zh-Hans\" ? \"en\" : \"zh-Hans\";\n    return\
+    \ { text: raw, source: autoSrc, target: autoTarget };\n  }\n\n  if (typeof $translater\
+    \ !== \"function\") {\n    return [\"当前版本不支持 $translater（需 iOS 26+ 及元书 1.12.1+）\"\
+    ];\n  }\n\n  var raw = pickInput();\n  if (!raw) {\n    return [\"请输入要翻译的文字，或选中文本后再运行\"\
+    ];\n  }\n\n  var parsed = parseInput(raw);\n  if (!parsed.text) {\n    return\
+    \ [\"请输入要翻译的内容\"];\n  }\n\n  try {\n    $log(\"快捷翻译 \" + parsed.source + \" ->\
+    \ \" + parsed.target);\n    var result = await $translater(parsed.text, parsed.source,\
+    \ parsed.target);\n    if (!result || !String(result).trim()) {\n      return\
+    \ [\"翻译结果为空\"];\n    }\n    return [String(result).trim()];\n  } catch (error)\
+    \ {\n    var msg = error && error.message ? error.message : String(error);\n \
+    \   $log(\"快捷翻译失败: \" + msg);\n    return [\"翻译失败：\" + msg];\n  }\n}"
+  isFavorite: false
+  allowPasteboard: false
+  tags: []
+- iconName: globe
+  iconType: system
+  name: 谷歌中英互译
+  content: "/**\n * 元书输入法 · 谷歌中英互译（免费在线翻译）\n *\n * 参考 pixivReader 免费翻译链路，支持两种模式：\n\
+    \ * 1. 代理模式（配置变量 translate_proxy_url 时启用）：\n *    POST { engine: \"google\", text,\
+    \ to }，兼容 pixivReader 的 /api/translate 接口。\n * 2. 直连模式（默认）：\n *    优先调用 Google\
+    \ Translate client=gtx 免费接口，失败时自动回退到 batchexecute (MkEWBc) RPC 接口。\n *\n * 权限要求：需开启键盘「完全访问」权限。\n\
+    \ * 输入来源（按优先级）：脚本输入框 $searchText → 键盘选中文本 $selectedText → 剪贴板 $pasteboardContent\n\
+    \ *\n * 可选元书变量：\n * - translate_proxy_url：自建代理地址（例如 https://your-domain/api/translate）\n\
+    \ * - google_translate_endpoint：覆盖直连主端点（默认 https://translate.googleapis.com/translate_a/single）\n\
+    \ *\n * 默认规则：\n * - 含中文字符 → 译为英文（en）\n * - 其他语言 → 译为简体中文（zh-CN）\n *\n * 指定目标语言（可选前缀）：\n\
+    \ * - 输入 `ja:你好` → 翻译为日语\n * - 输入 `zh-TW:测试` → 翻译为繁体中文\n */\n\nasync function\
+    \ output() {\n  function readVar(value) {\n    if (typeof value === \"string\"\
+    \ && value.trim().length > 0) {\n      return value.trim();\n    }\n    return\
+    \ \"\";\n  }\n\n  function pickInput() {\n    var sources = [\n      typeof $searchText\
+    \ === \"string\" ? $searchText : \"\",\n      typeof $selectedText === \"string\"\
+    \ ? $selectedText : \"\",\n      typeof $pasteboardContent === \"string\" ? $pasteboardContent\
+    \ : \"\",\n    ];\n    for (var i = 0; i < sources.length; i++) {\n      if (sources[i]\
+    \ && sources[i].trim().length > 0) {\n        return sources[i].trim();\n    \
+    \  }\n    }\n    return \"\";\n  }\n\n  function normalizeTargetLang(code) {\n\
+    \    var map = {\n      zh: \"zh-CN\",\n      \"zh-cn\": \"zh-CN\",\n      \"\
+    zh-hans\": \"zh-CN\",\n      \"zh-tw\": \"zh-TW\",\n      \"zh-hant\": \"zh-TW\"\
+    ,\n      en: \"en\",\n      ja: \"ja\",\n      jp: \"ja\",\n      ko: \"ko\",\n\
+    \      kr: \"ko\",\n      fr: \"fr\",\n      de: \"de\",\n      es: \"es\",\n\
+    \      ru: \"ru\",\n    };\n    return map[code.toLowerCase()] || null;\n  }\n\
+    \n  function parseInput(raw) {\n    var m = raw.match(/^([a-zA-Z]{2}(?:-[a-zA-Z]{2,4})?)\\\
+    s*[:：]\\s*([\\s\\S]+)$/);\n    if (m) {\n      var explicitTarget = normalizeTargetLang(m[1]);\n\
+    \      if (explicitTarget) {\n        return { text: m[2].trim(), target: explicitTarget\
+    \ };\n      }\n    }\n    var hasChinese = /[\\u4e00-\\u9fff]/.test(raw);\n  \
+    \  return { text: raw, target: hasChinese ? \"en\" : \"zh-CN\" };\n  }\n\n  async\
+    \ function translateViaProxy(proxyUrl, text, target) {\n    var res = await $http({\n\
+    \      url: proxyUrl,\n      method: \"POST\",\n      header: {\n        \"Content-Type\"\
+    : \"application/json\",\n        Accept: \"application/json\",\n      },\n   \
+    \   body: {\n        engine: \"google\",\n        text: text,\n        to: target,\n\
+    \      },\n      timeout: 15,\n    });\n    var status = res && res.response ?\
+    \ res.response.statusCode : 0;\n    var data = null;\n    try {\n      data =\
+    \ JSON.parse(res.data || \"null\");\n    } catch (_e) {\n      data = null;\n\
+    \    }\n    if (status < 200 || status >= 300 || (data && data.error)) {\n   \
+    \   var msg =\n        data && data.message ? data.message : \"HTTP \" + status;\n\
+    \      throw new Error(\"代理翻译失败：\" + msg);\n    }\n    var content =\n      data\
+    \ && typeof data.content === \"string\" ? data.content.trim() : \"\";\n    if\
+    \ (!content) {\n      throw new Error(\"代理返回译文为空\");\n    }\n    return content;\n\
+    \  }\n\n  async function translateViaGtx(endpoint, text, target) {\n    var url\
+    \ =\n      endpoint +\n      \"?client=gtx&sl=auto&tl=\" +\n      encodeURIComponent(target)\
+    \ +\n      \"&dt=t&q=\" +\n      encodeURIComponent(text);\n    var res = await\
+    \ $http({\n      url: url,\n      method: \"GET\",\n      header: {\n        Accept:\
+    \ \"application/json\",\n      },\n      timeout: 12,\n    });\n    var status\
+    \ = res && res.response ? res.response.statusCode : 0;\n    if (status < 200 ||\
+    \ status >= 300) {\n      throw new Error(\"gtx HTTP \" + status);\n    }\n  \
+    \  var json = JSON.parse(res.data || \"null\");\n    if (!Array.isArray(json)\
+    \ || !Array.isArray(json[0])) {\n      throw new Error(\"gtx 返回格式异常\");\n    }\n\
+    \    var parts = [];\n    for (var i = 0; i < json[0].length; i++) {\n      var\
+    \ seg = json[0][i];\n      if (Array.isArray(seg) && typeof seg[0] === \"string\"\
+    ) {\n        parts.push(seg[0]);\n      }\n    }\n    var translated = parts.join(\"\
+    \").trim();\n    if (!translated) {\n      throw new Error(\"gtx 译文为空\");\n  \
+    \  }\n    return translated;\n  }\n\n  function parseBatchExecuteResponse(rawText)\
+    \ {\n    if (!rawText) {\n      return \"\";\n    }\n    var cleaned = rawText.replace(/^\\\
+    )\\]\\}'\\s*/, \"\");\n    var lines = cleaned.split(/\\r?\\n/);\n    for (var\
+    \ i = 0; i < lines.length; i++) {\n      var line = lines[i].trim();\n      if\
+    \ (!line || line[0] !== \"[\") {\n        continue;\n      }\n      var outer\
+    \ = null;\n      try {\n        outer = JSON.parse(line);\n      } catch (_e)\
+    \ {\n        continue;\n      }\n      if (!Array.isArray(outer)) {\n        continue;\n\
+    \      }\n      for (var j = 0; j < outer.length; j++) {\n        var entry =\
+    \ outer[j];\n        if (\n          Array.isArray(entry) &&\n          entry[0]\
+    \ === \"wrb.fr\" &&\n          entry[1] === \"MkEWBc\" &&\n          typeof entry[2]\
+    \ === \"string\"\n        ) {\n          var inner = JSON.parse(entry[2]);\n \
+    \         var blocks =\n            inner &&\n            Array.isArray(inner[1])\
+    \ &&\n            Array.isArray(inner[1][0]) &&\n            Array.isArray(inner[1][0][0])\
+    \ &&\n            Array.isArray(inner[1][0][0][5])\n              ? inner[1][0][0][5]\n\
+    \              : [];\n          var segments = [];\n          for (var k = 0;\
+    \ k < blocks.length; k++) {\n            if (Array.isArray(blocks[k]) && typeof\
+    \ blocks[k][0] === \"string\") {\n              segments.push(blocks[k][0]);\n\
+    \            }\n          }\n          if (segments.length > 0) {\n          \
+    \  return segments.join(\"\").trim();\n          }\n        }\n      }\n    }\n\
+    \    return \"\";\n  }\n\n  async function translateViaBatchExecute(text, target)\
+    \ {\n    var payload = JSON.stringify([\n      [\n        [\n          \"MkEWBc\"\
+    ,\n          JSON.stringify([[text, \"auto\", target, true], [null]]),\n     \
+    \     null,\n          \"generic\",\n        ],\n      ],\n    ]);\n    var res\
+    \ = await $http({\n      url: \"https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc\"\
+    ,\n      method: \"POST\",\n      header: {\n        \"Content-Type\": \"application/x-www-form-urlencoded\"\
+    ,\n      },\n      body: {\n        \"f.req\": payload,\n      },\n      timeout:\
+    \ 12,\n    });\n    var status = res && res.response ? res.response.statusCode\
+    \ : 0;\n    if (status < 200 || status >= 300) {\n      throw new Error(\"batchexecute\
+    \ HTTP \" + status);\n    }\n    var translated = parseBatchExecuteResponse(res.data\
+    \ || \"\");\n    if (!translated) {\n      throw new Error(\"batchexecute 返回解析为空\"\
+    );\n    }\n    return translated;\n  }\n\n  var raw = pickInput();\n  if (!raw)\
+    \ {\n    return [\"请输入要翻译的文字，或选中文本后再运行\"];\n  }\n\n  var parsed = parseInput(raw);\n\
+    \  if (!parsed.text) {\n    return [\"请输入要翻译的内容\"];\n  }\n\n  var proxyUrl = readVar(\n\
+    \    typeof $translate_proxy_url !== \"undefined\" ? $translate_proxy_url : \"\
+    \"\n  );\n\n  try {\n    if (proxyUrl) {\n      $log(\"谷歌翻译(代理) -> \" + parsed.target);\n\
+    \      return [await translateViaProxy(proxyUrl, parsed.text, parsed.target)];\n\
+    \    }\n\n    var customEndpoint = readVar(\n      typeof $google_translate_endpoint\
+    \ !== \"undefined\"\n        ? $google_translate_endpoint\n        : \"\"\n  \
+    \  );\n    var gtxEndpoint = customEndpoint\n      ? customEndpoint.replace(/\\\
+    ?.*$/, \"\")\n      : \"https://translate.googleapis.com/translate_a/single\"\
+    ;\n\n    try {\n      $log(\"谷歌翻译(gtx) -> \" + parsed.target);\n      return [await\
+    \ translateViaGtx(gtxEndpoint, parsed.text, parsed.target)];\n    } catch (firstErr)\
+    \ {\n      if (customEndpoint) {\n        throw firstErr;\n      }\n      $log(\"\
+    gtx 失败，回退 batchexecute\");\n      return [await translateViaBatchExecute(parsed.text,\
+    \ parsed.target)];\n    }\n  } catch (error) {\n    var msg = error && error.message\
+    \ ? error.message : String(error);\n    $log(\"谷歌翻译失败: \" + msg);\n    return\
+    \ [\"谷歌翻译失败：\" + msg];\n  }\n}"
+  isFavorite: false
+  allowPasteboard: false
+  tags: []
+- iconName: message.fill
+  iconType: system
+  name: DeepSeek
+  content: "/**\n * 元书输入法 · DeepSeek（支持任意 OpenAI Chat Completions 兼容接口）\n *\n * 使用内置\
+    \ $http 发起单次对话请求，需开启键盘「完全访问」权限。\n *\n * 输入来源（按优先级）：脚本输入框 $searchText → 键盘选中文本\
+    \ $selectedText → 剪贴板 $pasteboardContent\n *\n * 元书「脚本 → ... → 变量」配置：\n * - deepseek_api_key（必填）：API\
+    \ Key\n * - deepseek_base_url（可选）：接口地址，默认 https://api.deepseek.com/chat/completions\n\
+    \ * - deepseek_model（可选）：模型名称，默认 deepseek-chat\n * - deepseek_system_prompt（可选）：系统提示词，默认直接返回适合上屏的精简文本\n\
+    \ * - deepseek_thinking（可选）：仅对 api.deepseek.com 生效，默认 disabled；填 enabled 可启用思考模式\n\
+    \ */\n\nasync function output() {\n  function readVar(value, fallback) {\n   \
+    \ if (typeof value === \"string\" && value.trim().length > 0) {\n      return\
+    \ value.trim();\n    }\n    return fallback;\n  }\n\n  function pickInput() {\n\
+    \    var sources = [\n      typeof $searchText === \"string\" ? $searchText :\
+    \ \"\",\n      typeof $selectedText === \"string\" ? $selectedText : \"\",\n \
+    \     typeof $pasteboardContent === \"string\" ? $pasteboardContent : \"\",\n\
+    \    ];\n    for (var i = 0; i < sources.length; i++) {\n      if (sources[i]\
+    \ && sources[i].trim().length > 0) {\n        return sources[i].trim();\n    \
+    \  }\n    }\n    return \"\";\n  }\n\n  function resolveEndpoint(rawUrl) {\n \
+    \   var cleaned = rawUrl.replace(/\\/+$/, \"\");\n    if (/\\/chat\\/completions$/i.test(cleaned))\
+    \ {\n      return cleaned;\n    }\n    // DeepSeek 端点去除冗余的 /v1\n    if (/^https?:\\\
+    /\\/api\\.deepseek\\.com\\/v1$/i.test(cleaned)) {\n      return cleaned.replace(/\\\
+    /v1$/i, \"\") + \"/chat/completions\";\n    }\n    return cleaned + \"/chat/completions\"\
+    ;\n  }\n\n  function isDeepSeekHost(url) {\n    return /^https?:\\/\\/api\\.deepseek\\\
+    .com(\\/|$)/i.test(url);\n  }\n\n  function normalizeContent(content) {\n    if\
+    \ (typeof content === \"string\") {\n      return content.trim();\n    }\n   \
+    \ if (Array.isArray(content)) {\n      var parts = [];\n      for (var i = 0;\
+    \ i < content.length; i++) {\n        var part = content[i];\n        if (typeof\
+    \ part === \"string\") {\n          parts.push(part);\n        } else if (part\
+    \ && typeof part === \"object\") {\n          if (typeof part.text === \"string\"\
+    ) {\n            parts.push(part.text);\n          } else if (part.text && typeof\
+    \ part.text.value === \"string\") {\n            parts.push(part.text.value);\n\
+    \          }\n        }\n      }\n      return parts.join(\"\").trim();\n    }\n\
+    \    return \"\";\n  }\n\n  function extractReply(parsed) {\n    if (!parsed ||\
+    \ typeof parsed !== \"object\") {\n      return \"\";\n    }\n    if (Array.isArray(parsed.choices)\
+    \ && parsed.choices[0]) {\n      var first = parsed.choices[0];\n      if (first.message\
+    \ && first.message.content !== undefined) {\n        var msgText = normalizeContent(first.message.content);\n\
+    \        if (msgText) {\n          return msgText;\n        }\n      }\n     \
+    \ if (first.delta && first.delta.content !== undefined) {\n        var deltaText\
+    \ = normalizeContent(first.delta.content);\n        if (deltaText) {\n       \
+    \   return deltaText;\n        }\n      }\n    }\n    if (parsed.output_text !==\
+    \ undefined) {\n      return normalizeContent(parsed.output_text);\n    }\n  \
+    \  if (parsed.content !== undefined) {\n      return normalizeContent(parsed.content);\n\
+    \    }\n    return \"\";\n  }\n\n  var apiKey = readVar(\n    typeof $deepseek_api_key\
+    \ !== \"undefined\" ? $deepseek_api_key : \"\",\n    \"\"\n  );\n  if (!apiKey)\
+    \ {\n    return [\"未配置变量 deepseek_api_key（请在元书「脚本 → ... → 变量」中添加）\"];\n  }\n\n\
+    \  var input = pickInput();\n  if (!input) {\n    return [\"请输入问题或选中文本后再运行 DeepSeek\"\
+    ];\n  }\n\n  var endpoint = resolveEndpoint(\n    readVar(\n      typeof $deepseek_base_url\
+    \ !== \"undefined\" ? $deepseek_base_url : \"\",\n      \"https://api.deepseek.com/chat/completions\"\
+    \n    )\n  );\n  var model = readVar(\n    typeof $deepseek_model !== \"undefined\"\
+    \ ? $deepseek_model : \"\",\n    \"deepseek-chat\"\n  );\n  var systemPrompt =\
+    \ readVar(\n    typeof $deepseek_system_prompt !== \"undefined\"\n      ? $deepseek_system_prompt\n\
+    \      : \"\",\n    \"你是输入法内联助手。直接给出最终可发送的纯文本结果，不要使用 Markdown 标题、代码块包裹或多余寒暄。\"\
+    \n  );\n  var thinkingMode = readVar(\n    typeof $deepseek_thinking !== \"undefined\"\
+    \ ? $deepseek_thinking : \"\",\n    \"disabled\"\n  );\n\n  var body = {\n   \
+    \ model: model,\n    messages: [\n      { role: \"system\", content: systemPrompt\
+    \ },\n      { role: \"user\", content: input },\n    ],\n    stream: false,\n\
+    \  };\n  if (isDeepSeekHost(endpoint) && thinkingMode !== \"enabled\") {\n   \
+    \ body.thinking = { type: \"disabled\" };\n  }\n\n  try {\n    $log(\"DeepSeek\
+    \ 请求模型: \" + model);\n    var res = null;\n    var status = 0;\n    for (var attempt\
+    \ = 0; attempt < 2; attempt++) {\n      res = await $http({\n        url: endpoint,\n\
+    \        method: \"POST\",\n        header: {\n          \"Content-Type\": \"\
+    application/json\",\n          Authorization: \"Bearer \" + apiKey,\n        },\n\
+    \        body: body,\n        timeout: 30,\n      });\n      status = res && res.response\
+    \ ? res.response.statusCode : 0;\n      if ((status !== 429 && status !== 503)\
+    \ || attempt >= 1) {\n        break;\n      }\n      if (typeof setTimeout ===\
+    \ \"function\") {\n        await new Promise(function (resolve) {\n          setTimeout(resolve,\
+    \ 300);\n        });\n      }\n    }\n\n    var parsed = null;\n    try {\n  \
+    \    parsed = JSON.parse((res && res.data) || \"null\");\n    } catch (_e) {\n\
+    \      parsed = null;\n    }\n\n    if (status < 200 || status >= 300) {\n   \
+    \   var apiErr =\n        parsed && parsed.error && parsed.error.message\n   \
+    \       ? parsed.error.message\n          : \"HTTP \" + status;\n      return\
+    \ [\"DeepSeek 请求失败：\" + apiErr];\n    }\n\n    var content = extractReply(parsed);\n\
+    \    if (!content) {\n      return [\"DeepSeek 返回内容为空\"];\n    }\n\n    return\
+    \ [content];\n  } catch (error) {\n    var msg = error && error.message ? error.message\
+    \ : String(error);\n    $log(\"DeepSeek 异常: \" + msg);\n    return [\"DeepSeek\
+    \ 调用失败：\" + msg];\n  }\n}"
+  isFavorite: false
+  allowPasteboard: false
+  tags: []
+- iconName: paperplane
+  iconType: system
+  name: Webhook 发送
+  content: "/**\n * 元书输入法 · Webhook 发送（单次手动外发）\n *\n * 仅在手动触发时将当前文本以 JSON POST 到自建\
+    \ Webhook 端点，并在候选栏显示回执。\n * 需开启键盘「完全访问」权限。默认关闭剪贴板访问，如需发送剪贴板请在该脚本设置中自行开启。\n *\n\
+    \ * 输入来源（按优先级）：脚本输入框 $searchText → 键盘选中文本 $selectedText → 剪贴板 $pasteboardContent\n\
+    \ *\n * 元书「脚本 → ... → 变量」配置：\n * - webhook_url（必填）：接收端 URL（需以 http:// 或 https://\
+    \ 开头）\n * - webhook_token（可选）：Bearer Token，配置后自动附加 Authorization 请求头\n *\n * 请求体示例：\n\
+    \ * {\"text\": \"内容\", \"source\": \"selectedText\", \"timestamp\": \"2026-11-26T07:00:00.000Z\"\
+    }\n */\n\nasync function output() {\n  function readVar(value) {\n    if (typeof\
+    \ value === \"string\" && value.trim().length > 0) {\n      return value.trim();\n\
+    \    }\n    return \"\";\n  }\n\n  function pickInputWithSource() {\n    var candidates\
+    \ = [\n      {\n        source: \"searchText\",\n        value: typeof $searchText\
+    \ === \"string\" ? $searchText : \"\",\n      },\n      {\n        source: \"\
+    selectedText\",\n        value: typeof $selectedText === \"string\" ? $selectedText\
+    \ : \"\",\n      },\n      {\n        source: \"pasteboardContent\",\n       \
+    \ value:\n          typeof $pasteboardContent === \"string\" ? $pasteboardContent\
+    \ : \"\",\n      },\n    ];\n    for (var i = 0; i < candidates.length; i++) {\n\
+    \      if (candidates[i].value && candidates[i].value.trim().length > 0) {\n \
+    \       return {\n          source: candidates[i].source,\n          text: candidates[i].value,\n\
+    \        };\n      }\n    }\n    return null;\n  }\n\n  var url = readVar(\n \
+    \   typeof $webhook_url !== \"undefined\" ? $webhook_url : \"\"\n  );\n  if (!url)\
+    \ {\n    return [\"未配置变量 webhook_url（请在元书「脚本 → ... → 变量」中添加）\"];\n  }\n  if (!/^https?:\\\
+    /\\//i.test(url)) {\n    return [\"webhook_url 必须以 http:// 或 https:// 开头\"];\n\
+    \  }\n\n  var picked = pickInputWithSource();\n  if (!picked) {\n    return [\"\
+    无待发送内容（请输入、选中文本，或在脚本设置中允许读取剪贴板）\"];\n  }\n\n  var token = readVar(\n    typeof\
+    \ $webhook_token !== \"undefined\" ? $webhook_token : \"\"\n  );\n  var header\
+    \ = {\n    \"Content-Type\": \"application/json\",\n  };\n  if (token) {\n   \
+    \ header.Authorization = \"Bearer \" + token;\n  }\n\n  try {\n    $log(\"Webhook\
+    \ 发送来源: \" + picked.source + \", 长度: \" + picked.text.length);\n    var res =\
+    \ await $http({\n      url: url,\n      method: \"POST\",\n      header: header,\n\
+    \      body: {\n        text: picked.text,\n        source: picked.source,\n \
+    \       timestamp: new Date().toISOString(),\n      },\n      timeout: 15,\n \
+    \   });\n\n    var status = res && res.response ? res.response.statusCode : 0;\n\
+    \    if (status >= 200 && status < 300) {\n      return [\"已发送 [\" + picked.source\
+    \ + \"] (HTTP \" + status + \")\"];\n    }\n    return [\"发送失败 (HTTP \" + status\
+    \ + \")\"];\n  } catch (error) {\n    var msg = error && error.message ? error.message\
+    \ : String(error);\n    $log(\"Webhook 异常: \" + msg);\n    return [\"发送异常：\" +\
+    \ msg];\n  }\n}"
+  isFavorite: false
+  allowPasteboard: false
+  tags: []
+scriptVariables: []
+scriptTags: []

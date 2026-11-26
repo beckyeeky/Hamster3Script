@@ -1,0 +1,70 @@
+# 元书输入法脚本构建清单
+# 运行 `python3 tools/build.py` 生成 dist/元输入法脚本.yaml
+
+scripts:
+  - file: scripts/roll.js
+    name: Roll
+    iconName: die.face.5
+    iconType: system
+    isFavorite: false
+    allowPasteboard: false
+    tags: []
+
+  - file: scripts/base64-decode.js
+    name: Base64 解码
+    iconName: curlybraces
+    iconType: system
+    isFavorite: false
+    allowPasteboard: false
+    tags: []
+
+  - file: scripts/base64-encode.js
+    name: Base64 编码
+    iconName: chevron.left.forwardslash.chevron.right
+    iconType: system
+    isFavorite: false
+    allowPasteboard: false
+    tags: []
+
+  - file: scripts/unicode.js
+    name: Unicode 查询
+    iconName: text.magnifyingglass
+    iconType: system
+    isFavorite: false
+    allowPasteboard: false
+    tags: []
+
+  - file: scripts/quick-translate.js
+    name: 快捷翻译
+    iconName: translate
+    iconType: system
+    isFavorite: false
+    allowPasteboard: false
+    tags: []
+
+  - file: scripts/google-translate.js
+    name: 谷歌中英互译
+    iconName: globe
+    iconType: system
+    isFavorite: false
+    allowPasteboard: false
+    tags: []
+
+  - file: scripts/deepseek.js
+    name: DeepSeek
+    iconName: message.fill
+    iconType: system
+    isFavorite: false
+    allowPasteboard: false
+    tags: []
+
+  - file: scripts/webhook-send.js
+    name: Webhook 发送
+    iconName: paperplane
+    iconType: system
+    isFavorite: false
+    allowPasteboard: false
+    tags: []
+
+scriptVariables: []
+scriptTags: []
